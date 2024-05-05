@@ -4,6 +4,8 @@ import casadi as ca
 import numpy as np
 import matplotlib.pyplot as plt
 
+from boxconstraint import BoxConstraint
+
 TIME_STEP = 0.05  # Time step for synchronous mode
 
 # Section to set up similuator (prob torcs)----------
@@ -54,6 +56,72 @@ for k in range(N):
 
 opti.minimize(obj)
 
+# Maximum steerin angle for dynamics
+max_steering_angle_deg = max(wheel.max_steer_angle for wheel in
+                             vehicle.get_physics_control().wheels)  # Maximum steering angle in degrees (from vehicle physics control
+max_steering_angle_rad = max_steering_angle_deg * (ca.pi / 180)  # Maximum steering angle in radians
 
+# Dynamics (Euler discretization using bicycle model)
+for k in range(N):
+    steering_angle_rad = U[0, k] * max_steering_angle_rad  # Convert normalized steering angle to radians
+
+    opti.subject_to(X[:, k + 1] == X[:, k] + dt * ca.vertcat(
+        X[3, k] * ca.cos(X[2, k]),
+        X[3, k] * ca.sin(X[2, k]),
+        (X[3, k] / params['L']) * ca.tan(steering_angle_rad),
+        U[1, k]
+    ))
+
+# Constraints
+opti.subject_to(X[:, 0] == P)  # Initial state constraint
+
+# Input constraints
+steering_angle_bounds = [-1.0, 1.0]
+acceleration_bounds = [-1.0, 1.0]
+lb = np.array([steering_angle_bounds[0], acceleration_bounds[0]]).reshape(-1, 1)
+ub = np.array([steering_angle_bounds[1], acceleration_bounds[1]]).reshape(-1, 1)
+action_space = BoxConstraint(lb=lb, ub=ub)
+
+# State constraints
+# x_bounds = [-10000, 1000]  # x position bounds (effectively no bounds)
+# y_bounds = [-1000, 1000]  # y position bounds (effectively no bounds)
+# theta_bounds = [0, 360]  # theta bounds in degrees
+# v_bounds = [-10, 10]  # velocity bounds
+# lb = np.array([x_bounds[0], y_bounds[0], theta_bounds[0], v_bounds[0]]).reshape(-1, 1)
+# ub = np.array([x_bounds[1], y_bounds[1], theta_bounds[1], v_bounds[1]]).reshape(-1, 1)
+# state_space = BoxConstraint(lb=lb, ub=ub)
+
+# Apply constraints to optimization problem
+for i in range(N):
+    # Input constraints
+    opti.subject_to(action_space.H_np @ U[:, i] <= action_space.b_np)
+
+    # State constraints
+    # opti.subject_to(state_space.H_np @ X[:, i] <= state_space.b_np)
+
+# Setup solver
+acceptable_dual_inf_tol = 1e11
+acceptable_compl_inf_tol = 1e-3
+acceptable_iter = 15
+acceptable_constr_viol_tol = 1e-3
+acceptable_tol = 1e-6
+
+opts = {"ipopt.acceptable_tol": acceptable_tol,
+        "ipopt.acceptable_constr_viol_tol": acceptable_constr_viol_tol,
+        "ipopt.acceptable_dual_inf_tol": acceptable_dual_inf_tol,
+        "ipopt.acceptable_iter": acceptable_iter,
+        "ipopt.acceptable_compl_inf_tol": acceptable_compl_inf_tol,
+        "ipopt.hessian_approximation": "limited-memory",
+        "ipopt.print_level": 0}
+opti.solver('ipopt', opts)
+
+# Array to store closed-loop trajectory states (X and Y coordinates)
+closed_loop_data = []
+open_loop_data = []
+residuals_data = []
+
+# Initialize warm-start parameters
+prev_sol_x = None
+prev_sol_u = None
 
 
