@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  carla_sim:
+    build:
+      context: .
+      dockerfile: dockerfile
+    environment:
+      - DISPLAY=1
+      - CUDA_VISIBLE_DEVICES=0,1
+      - NVIDIA_VISIBLE_DEVICES=0,1
+    runtime: nvidia
+    volumes:
+      - /home/hasan3773/Research-MPC:/home/carla/Research-MPC
+    command: /bin/bash -c "/home/carla/CarlaUE4.sh -nosound -carla-server -RenderOffscreen -world-port=2000 -quality-level=Low"

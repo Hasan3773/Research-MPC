@@ -8,10 +8,77 @@ from boxconstraint import BoxConstraint
 
 TIME_STEP = 0.05  # Time step for synchronous mode
 
-# Section to set up similuator (prob torcs)----------
+## SETUP ##
+# Connect to CARLA
+client = carla.Client('localhost', 2000)
+maps = [m.replace('/Game/Carla/Maps/', '') for m in client.get_available_maps()]
+print('Available maps: ', maps)
+world = client.get_world()
+mymap = world.get_map()
+print('Using map: ', mymap.name)
+spectator = world.get_spectator()
 
-# Section to generate waypoints to follow -----------
-# currently based on spawn point locatio in carla so will change
+# CARLA Settings
+settings = world.get_settings()
+# Timing settings
+settings.synchronous_mode = True  # Enables synchronous mode
+TIME_STEP = 0.05  # Time step for synchronous mode
+settings.fixed_delta_seconds = TIME_STEP
+# Physics substep settings
+settings.substepping = True
+settings.max_substep_delta_time = 0.01
+settings.max_substeps = 10
+
+world.apply_settings(settings)
+
+# Output client and world objects to console
+print(client)
+print(world)
+
+# Function to move the spectator camera
+def move_spectator_to_vehicle(vehicle, spectator, distance=10):
+    vehicle_location = vehicle.get_location()
+    # Set viewing angle to slightly above the vehicle
+    spectator_transform = carla.Transform(vehicle_location + carla.Location(z=distance), carla.Rotation(pitch=-90))
+    spectator.set_transform(spectator_transform)
+
+
+# Use recommended spawn points
+spawn_points = mymap.get_spawn_points()
+spawn_point = spawn_points[0]
+
+# Spawn vehicle
+vehicles = world.get_actors().filter('vehicle.*')
+blueprint_library = world.get_blueprint_library()
+vehicle_bp = blueprint_library.filter('model3')[0]
+print("Vehicle blueprint attributes:")
+for attr in vehicle_bp:
+    print('  - {}'.format(attr))
+
+if len(vehicles) == 0:
+    vehicle = world.spawn_actor(vehicle_bp, spawn_point)
+else:
+    # Reset world
+    for vehicle in vehicles:
+        vehicle.destroy()
+    vehicle = world.spawn_actor(vehicle_bp, spawn_point)
+print(vehicle)
+
+
+def generate_waypoint_relative_to_spawn(forward_offset=0, sideways_offset=0):
+    waypoint_x = spawn_point.location.x + spawn_point.get_forward_vector().x * forward_offset + spawn_point.get_right_vector().x * sideways_offset
+    waypoint_y = spawn_point.location.y + spawn_point.get_forward_vector().y * forward_offset + spawn_point.get_right_vector().y * sideways_offset
+    return ca.vertcat(waypoint_x, waypoint_y)
+
+
+def generate_waypoint(x, y):
+    return ca.vertcat(x, y)
+
+
+waypoints = []
+
+for i in range(SIM_DURATION):
+    waypoints.append(generate_waypoint_relative_to_spawn(-10, 0))
 
 # MPC paramaters 
 params = {
