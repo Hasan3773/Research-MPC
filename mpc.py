@@ -7,7 +7,7 @@ import math
 
 # Parameters
 params = {
-    'L': 2.875  # TODO: if this is necassary, adjust for metadrive
+    'L': (1.05234 + 1.4166)/2.0 
 }
 # define arbatrary end objective
 TIME_STEP = 0.05  # Time step
@@ -27,7 +27,7 @@ P = opti.parameter(state_dim)  # initial state parameter
 Q_base = ca.MX.eye(state_dim)  # Base state penalty matrix (emphasizes position states)
 weight_increase_factor = 1.00  # Increase factor for each step in the prediction horizon
 R = ca.MX.eye(control_dim)  # control penalty matrix for objective function
-W = opti.parameter(2, N)  # Reference trajectory parameter
+W = opti.parameter(2, 1)  # Reference trajectory parameter
 
 # Objective
 obj = 0
@@ -38,7 +38,7 @@ for k in range(N):
     u_k = U[:, k]  # Current control input
     x_next = X[:, k + 1]  # Next state
 
-    x_ref = ca.vertcat(W[:, k],
+    x_ref = ca.vertcat(W,
                        ca.MX.zeros(state_dim - 2, 1))  # Reference state with waypoint and zero for other states
 
     dx = x_k - x_ref  # Deviation of state from reference state
@@ -51,8 +51,8 @@ for k in range(N):
 opti.minimize(obj)
 
 # TODO: Find actual values for metadrive car
-max_steering_angle_deg = 9999999 
-max_steering_angle_rad = 9999999
+max_steering_angle_deg = 60
+max_steering_angle_rad = 60 * ca.pi / 180
 
 # Dynamics (Euler discretization using bicycle model)
 for k in range(N):
@@ -105,29 +105,29 @@ residuals_data = []
 prev_sol_x = None
 prev_sol_u = None
 
+def generate_spline(vehicle):
+    long_pos = vehicle.lane.local_coordinates(vehicle.position)[0]
+    lane_theta = vehicle.lane.heading_theta_at(long_pos)
+    waypoint_x = np.cos(lane_theta)  
+    waypoint_y = np.sin(lane_theta)
+    return ca.vertcat(waypoint_x, waypoint_y)
 
-def generate_spline(starting_point, slope1, slope2, ending_point):
-    x = np.array([starting_point[0], ending_point[0]])
-    y = np.array([ending_point[1], ending_point[1]])
-    dydx = np.array([slope1, slope2])
-            
-    cubic_spline = CubicHermiteSpline(x, y, dydx, extrapolate=True)
-    # TODO: discretize spline for each second, depending on velocity 
-        
-    return cubic_spline
 
 # cubic_spline references W symbol & position references P symbol
-def find_action(cubic_spline, postion):
+def find_action(vehicle):
+    global prev_sol_x
+    global prev_sol_u
+
+    waypoints = generate_spline(vehicle) 
+
     #  Fetch initial state from MetaDrive
-    x0 = postion.x_pos
-    y0 = postion.y_pos
-    theta0 = postion.yaw / 180 * ca.pi # TODO: these accessors are definetly wrong lol
-    velocity_vector = postion.vel
-    v0 = ca.sqrt(velocity_vector.x ** 2 + velocity_vector.y ** 2)
+    x0 = vehicle.position[0]
+    y0 = vehicle.position[1]
+    theta0 = np.arctan2(vehicle.heading[1], vehicle.heading[0])
+    v0 = ca.sqrt(vehicle.velocity[0] ** 2 + vehicle.velocity[1] ** 2)
 
     print("Current x: ", x0)
     print("Current y: ", y0)
-    print("Current yaw: ", postion.yaw)
     print("Current theta: ", theta0)
     print("Current velocity: ", v0)
     
@@ -140,7 +140,7 @@ def find_action(cubic_spline, postion):
     opti.set_value(P, initial_state)
 
     # Set the reference trajectory for the current iteration
-    opti.set_value(cubic_spline) # TODO: set to discretized points of cubic spline
+    opti.set_value(W, waypoints)
 
     if prev_sol_x is not None and prev_sol_u is not None:
         # Warm-starting the solver with the previous solution

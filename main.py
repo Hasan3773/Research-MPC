@@ -4,16 +4,15 @@ import numpy as np
 import mpc 
 
 env = MetaDriveEnv(dict(
-        traffic_mode="respawn", map="SSS"))       
+        traffic_mode="respawn", map="SSS", use_render = True))       
       
 obs, info = env.reset()
 for i in range(10000):
-    spline = mpc.generate_spline() 
-    action = mpc.find_action(spline, env.agent.pos) # calls mpc solver
+    action = mpc.find_action(env.vehicle) # calls mpc solver
 
     obs, reward, terminated, truncated, info = env.step(action)
 
-    env.render(mode="topdown",
+    env.render(mode="render",
     scaling=None,
     film_size=(500, 500),
     screen_size=(1500, 500),
