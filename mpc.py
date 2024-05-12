@@ -105,20 +105,43 @@ residuals_data = []
 prev_sol_x = None
 prev_sol_u = None
 
+# Distance between waypoints
+DISTANCE = 2
 def generate_spline(vehicle):
-    long_pos = vehicle.lane.local_coordinates(vehicle.position)[0]
-    lane_theta = vehicle.lane.heading_theta_at(long_pos)
-    waypoint_x = np.cos(lane_theta)  
-    waypoint_y = np.sin(lane_theta)
-    return ca.vertcat(waypoint_x, waypoint_y)
+    if vehicle.lane in vehicle.navigation.current_ref_lanes:
+        current_lane = vehicle.lane
+    else:
+        current_lane = vehicle.navigation.current_ref_lanes[0]
+    long_pos = current_lane.local_coordinates(vehicle.position)[0]
+    lane_theta = current_lane.heading_theta_at(long_pos)
+    waypoint_x = vehicle.position[0] + np.cos(lane_theta) * DISTANCE
+    waypoint_y = vehicle.position[1] + np.sin(lane_theta) * DISTANCE
+    return ca.vertcat(waypoint_x, waypoint_y), [waypoint_x, waypoint_y]
+
+def make_line(x_offset, height, y_dir=1, color=(1,105/255,180/255)):
+    points = [(x*y_dir,x_offset+x,height*x/10+height) for x in range(10)]
+    colors = [np.clip(np.array([*color,1])*(i+1)/11, 0., 1.0) for i in range(10)]
+    if y_dir<0:
+        points = points[::-1]
+        colors = colors[::-1]
+    return points, colors
+
+HEIGHT = 0.5
+def draw_waypoint(drawer, waypoint):
+    point = [(int(waypoint[0]), int(waypoint[1]), HEIGHT)]
+    color = [np.array([0.09090909, 0.03743316, 0.06417112, 0.09090909])]
+    drawer.reset()
+    drawer.draw_points(point, color)
 
 
 # cubic_spline references W symbol & position references P symbol
-def find_action(vehicle):
+def find_action(vehicle, drawer=None):
     global prev_sol_x
     global prev_sol_u
 
-    waypoints = generate_spline(vehicle) 
+    waypoints, waypoint_arr = generate_spline(vehicle)
+    if drawer is not None:
+        draw_waypoint(drawer, waypoint_arr)
 
     #  Fetch initial state from MetaDrive
     x0 = vehicle.position[0]
