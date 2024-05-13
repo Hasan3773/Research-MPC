@@ -39,7 +39,7 @@ for k in range(N):
     x_next = X[:, k + 1]  # Next state
 
     x_ref = ca.vertcat(W,
-                       ca.MX.zeros(state_dim - 2, 1))  # Reference state with waypoint and zero for other states
+                        0, 1)  # Reference state with waypoint and zero for other states
 
     dx = x_k - x_ref  # Deviation of state from reference state
     du = u_k  # Control input deviation (assuming a desired control input of zero)
@@ -114,8 +114,8 @@ def generate_spline(vehicle):
         current_lane = vehicle.navigation.current_ref_lanes[0]
     long_pos = current_lane.local_coordinates(vehicle.position)[0]
     lane_theta = current_lane.heading_theta_at(long_pos)
-    waypoint_x = vehicle.position[0] + np.cos(lane_theta) * DISTANCE
-    waypoint_y = vehicle.position[1] + np.sin(lane_theta) * DISTANCE
+    waypoint_x = vehicle.position[0] + np.cos(lane_theta) * DISTANCE *2
+    waypoint_y = vehicle.position[1] + np.sin(lane_theta) * DISTANCE *2
     return ca.vertcat(waypoint_x, waypoint_y), [waypoint_x, waypoint_y]
 
 def make_line(x_offset, height, y_dir=1, color=(1,105/255,180/255)):
