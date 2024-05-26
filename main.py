@@ -1,4 +1,4 @@
-from metadrive.metadrive.envs import MetaDriveEnv
+from metadrive.envs import MetaDriveEnv
 from scipy.interpolate import CubicHermiteSpline
 import numpy as np
 import mpc 

@@ -93,7 +93,9 @@ opts = {"ipopt.acceptable_tol": acceptable_tol,
         "ipopt.acceptable_iter": acceptable_iter,
         "ipopt.acceptable_compl_inf_tol": acceptable_compl_inf_tol,
         "ipopt.hessian_approximation": "limited-memory",
-        "ipopt.print_level": 0}
+        "ipopt.print_level": 0,
+        "print_time": 0,
+        "ipopt.sb": 'yes'}
 opti.solver('ipopt', opts)
 
 # Array to store closed-loop trajectory states (X and Y coordinates)
@@ -105,8 +107,17 @@ residuals_data = []
 prev_sol_x = None
 prev_sol_u = None
 
+# Extend 2D coords into 3D space
+def extendTo3D(arr, extend):
+    ret = []
+    for e in arr:
+        ret.append([e[0], e[1], extend])
+    return ret
+
 # Distance between waypoints
 DISTANCE = 2
+# Height of waypoints above ground
+HEIGHT = 0.5
 def generate_spline(vehicle):
     if vehicle.lane in vehicle.navigation.current_ref_lanes:
         current_lane = vehicle.lane
@@ -116,7 +127,8 @@ def generate_spline(vehicle):
     lane_theta = current_lane.heading_theta_at(long_pos)
     waypoint_x = vehicle.position[0] + np.cos(lane_theta) * DISTANCE *2
     waypoint_y = vehicle.position[1] + np.sin(lane_theta) * DISTANCE *2
-    return ca.vertcat(waypoint_x, waypoint_y), [waypoint_x, waypoint_y]
+    print(current_lane.get_polyline())
+    return ca.vertcat(waypoint_x, waypoint_y), extendTo3D(current_lane.get_polyline(), HEIGHT)
 
 def make_line(x_offset, height, y_dir=1, color=(1,105/255,180/255)):
     points = [(x*y_dir,x_offset+x,height*x/10+height) for x in range(10)]
@@ -126,16 +138,19 @@ def make_line(x_offset, height, y_dir=1, color=(1,105/255,180/255)):
         colors = colors[::-1]
     return points, colors
 
-HEIGHT = 0.5
-def draw_waypoint(drawer, waypoint):
-    point = [(int(waypoint[0]), int(waypoint[1]), HEIGHT)]
-    color = [np.array([0.09090909, 0.03743316, 0.06417112, 0.09090909])]
+def draw_waypoint(drawer, waypoints):
     drawer.reset()
-    drawer.draw_points(point, color)
+    for k, waypoint in enumerate(waypoints):
+        point = [((waypoint[0]), (waypoint[1]), HEIGHT)]
+        color = [np.array([0.09090909, 0.03743316, 0.06417112, 0.09090909])]
+        drawer.draw_points(point, color)
 
 
 # cubic_spline references W symbol & position references P symbol
-def find_action(vehicle, drawer=None):
+def find_action(vehicle, drawer=None, verbose=False):
+    # if not verbose:
+    #     def print(*args, **kwargs):
+    #         pass
     global prev_sol_x
     global prev_sol_u
 
@@ -149,10 +164,11 @@ def find_action(vehicle, drawer=None):
     theta0 = np.arctan2(vehicle.heading[1], vehicle.heading[0])
     v0 = ca.sqrt(vehicle.velocity[0] ** 2 + vehicle.velocity[1] ** 2)
 
-    print("Current x: ", x0)
-    print("Current y: ", y0)
-    print("Current theta: ", theta0)
-    print("Current velocity: ", v0)
+    if verbose:
+        print("Current x: ", x0)
+        print("Current y: ", y0)
+        print("Current theta: ", theta0)
+        print("Current velocity: ", v0)
     
     # Store current state in the closed-loop trajectory data
     if i > 0:
@@ -180,9 +196,9 @@ def find_action(vehicle, drawer=None):
         # Bound acceleration and steering angle to [-1, 1]
         u[0] = np.clip(u[0], -1, 1)
         u[1] = np.clip(u[1], -1, 1)
-
-        print("Steering angle: ", u[0])
-        print("Acceleration: ", u[1])
+        if verbose:
+            print("Steering angle: ", u[0])
+            print("Acceleration: ", u[1])
 
     # Update previous solution variables for warm-starting next iteration
     prev_sol_x = sol.value(X)
