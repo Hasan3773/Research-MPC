@@ -12,7 +12,7 @@ obs, info = env.reset()
 drawer = env.engine.make_point_drawer(scale=1) # create a point drawer
 for i in range(10000):
     action = mpc.find_action(env.vehicle, drawer) # calls mpc solver
-
+    mpc.get_splines_to_destination(env.vehicle, drawer)
     obs, reward, terminated, truncated, info = env.step(action)
 
 #     env.render(mode="render",
