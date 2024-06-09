@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import casadi as ca
 import boxconstraint as bx
 import math
+import spline_dist
+import get_spline
 
 # Parameters
 params = {
@@ -28,6 +30,9 @@ Q_base = ca.MX.eye(state_dim)  # Base state penalty matrix (emphasizes position 
 weight_increase_factor = 1.00  # Increase factor for each step in the prediction horizon
 R = ca.MX.eye(control_dim)  # control penalty matrix for objective function
 W = opti.parameter(2, 1)  # Reference trajectory parameter
+A = None # list of start points
+B = None # list of end points
+x_ref = get_spline.get_splines_to_destination()
 
 # Objective
 obj = 0
@@ -41,11 +46,12 @@ for k in range(N):
     x_ref = ca.vertcat(W,
                         0, 1)  # Reference state with waypoint and zero for other states
     
-    # find deviation from reference spline
-    # x_ref = 
-
+    # get reference spline 
+    x_ref = get_spline.get_splines_to_destination()
 
     dx = x_k - x_ref  # Deviation of state from reference state
+    dx = spline_dist.min_lineseg_dist(x_ref, A, B)
+
     du = u_k  # Control input deviation (assuming a desired control input of zero)
 
     # Quadratic cost with reference state and control input
@@ -209,53 +215,5 @@ def find_action(vehicle, drawer=None, verbose=False):
     prev_sol_u = sol.value(U)
 
     return [u[0], u[1]]
-
-
-def get_splines_to_destination(vehicle, drawer):
-    """
-    Extract the entirety of splines from current position to end state.
-
-    Args:
-        vehicle: The vehicle object which contains navigation information, including the road network and checkpoints.
-        drawer: The drawer object used to visualize waypoints.
-
-    Returns: full_spline: A numpy array representing the concatenated spline of the entire trajectory from the
-    current position to the destination.
-    """
-    all_splines = []
-    node_network_navigation = vehicle.navigation
-    road_network = node_network_navigation.map.road_network
-    checkpoints = node_network_navigation.checkpoints
-
-    # Debugging: Print checkpoints
-    print("Extracting splines from the following checkpoints:")
-    for i, checkpoint in enumerate(checkpoints):
-        print(f"Checkpoint {i}: {checkpoint}")
-
-    for j in range(len(checkpoints) - 1):
-        start_node = checkpoints[j]
-        end_node = checkpoints[j + 1]
-        lanes = road_network.graph[start_node][end_node]
-
-        # Debugging: Print lane information
-        print(f"Extracting lanes from node {start_node} to node {end_node}")
-
-        for lane in lanes:
-            # Debugging: Print lane index and length
-            print(f"Extracting spline from lane index {lane.index} with length {lane.length}")
-            spline = lane.get_polyline()
-            all_splines.append(spline)
-
-    # Concatenate all splines
-    full_spline = np.concatenate(all_splines)
-
-    # Debugging: Print final spline information
-    print(f"Final spline has {len(full_spline)} points")
-
-    # Display the spline in MetaDrive
-    for waypoint in full_spline:
-        draw_waypoint(drawer, waypoint)
-
-    return full_spline
 
  
