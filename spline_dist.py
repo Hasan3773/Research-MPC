@@ -28,20 +28,27 @@ def min_lineseg_dist(p, a, b, d_ba=None):
     # Normalize the vectors
     norm = ca.reshape(norm, d_ba.size1(), 1)
     d = d_ba / norm
-
+    # print("d:", d)
+    # print("a:", a)
     # signed parallel distance components
     # rowwise dot products of 2D vectors
-    s = ca.sum1((a - p) * d)
-    t = ca.sum1((p - b) * d)
-
+    p_prime = ca.repmat(p.T, a.size1())
+    # print("p:", p_prime)
+    s = ca.sum2((a - p_prime) * d).T
+    t = ca.sum2((p_prime - b) * d).T
+    # print("s calc:", (a-p_prime)*d)
+    # print("s:", s)
+    # print("t:", t)
     # clamped parallel distance
     zeros_vec = ca.DM.zeros(s.size())
     h = ca.fmax(ca.fmax(s, t), zeros_vec)
-
+    # print("h:", h)
     # perpendicular distance component
     # rowwise cross products of 2D vectors
-    d_pa = p - a
+    d_pa = p_prime - a
+    # print("d_pa:", d_pa)
     c = d_pa[:, 0] * d[:, 1] - d_pa[:, 1] * d[:, 0]
+    # print("c:", c)
     min_dists = ca.sqrt(h**2 + ca.transpose(c)**2)
 
     return min_dists
@@ -63,20 +70,26 @@ def min_lineseg_dist_np(p, a, b, d_ba=None):
         if d_ba is None:
             d_ba = b - a
         d = np.divide(d_ba, (np.hypot(d_ba[:, 0], d_ba[:, 1]).reshape(-1, 1)))
-
+        # print("d:", d)
+        # print("a:", a)
+        # print("p:", p)
         # signed parallel distance components
         # rowwise dot products of 2D vectors
         s = np.multiply(a - p, d).sum(axis=1)
         t = np.multiply(p - b, d).sum(axis=1)
-
+        # print("s calc:", (a-p)*d)
+        # print("s:", s)
+        # print("t:", t)
         # clamped parallel distance
         h = np.maximum.reduce([s, t, np.zeros(len(s))])
-
+        # print("h:", h)
         # perpendicular distance component
         # rowwise cross products of 2D vectors
         d_pa = p - a
+        # print("d_pa:", d_pa)
         c = d_pa[:, 0] * d[:, 1] - d_pa[:, 1] * d[:, 0]
         min_dists = np.hypot(h, c)
+        # print("c:", c)
         return min_dists
 
 
@@ -117,7 +130,6 @@ def min_lineseg_dist_np2(p, a, b, d_ba=None):
         return min_dists
 
 if __name__ == "__main__":
-     
     # Test cases
     a = ca.DM([[1, 2], [3, 4]])
     b = ca.DM([[5, 6], [7, 8]])
@@ -130,10 +142,10 @@ if __name__ == "__main__":
     min_dists_single = min_lineseg_dist(p1, a, b)
     print("Min distances (single point):\n", min_dists_single)
 
-    # Multiple points test
-    print("Multiple points test")
-    min_dists_multiple = min_lineseg_dist(p2, a, b)
-    print("Min distances (multiple points):\n", min_dists_multiple)
+    # # Multiple points test
+    # print("Multiple points test")
+    # min_dists_multiple = min_lineseg_dist(p2, a, b)
+    # print("Min distances (multiple points):\n", min_dists_multiple)
 
     # Test cases
     a = np.array([[1, 2], [3, 4]])
@@ -147,10 +159,10 @@ if __name__ == "__main__":
     min_dists_single = min_lineseg_dist_np(p1, a, b)
     print("Min distances (single point):\n", min_dists_single)
     
-    # Multiple points test
-    print("Multiple points test")
-    min_dists_multiple = min_lineseg_dist_np(p2, a, b)
-    print("Min distances (multiple points):\n", min_dists_multiple)    
+    # # Multiple points test
+    # print("Multiple points test")
+    # min_dists_multiple = min_lineseg_dist_np(p2, a, b)
+    # print("Min distances (multiple points):\n", min_dists_multiple)    
 
     # Test cases
     a = np.array([[1, 2], [3, 4]])
@@ -164,7 +176,7 @@ if __name__ == "__main__":
     min_dists_single = min_lineseg_dist_np2(p1, a, b)
     print("Min distances (single point):\n", min_dists_single)
 
-    # Multiple points test
-    print("Multiple points test")
-    min_dists_multiple = min_lineseg_dist_np2(p2, a, b)
-    print("Min distances (multiple points):\n", min_dists_multiple)
+    # # Multiple points test
+    # print("Multiple points test")
+    # min_dists_multiple = min_lineseg_dist_np2(p2, a, b)
+    # print("Min distances (multiple points):\n", min_dists_multiple)
