@@ -22,16 +22,16 @@ class ClassMPC:
         control_dim = 2  # Dimension of the control input [steering angle, acceleration]
 
         # Initialize Opti object
-        opti = ca.Opti()
+        self.opti = ca.Opti()
 
         # Declare variables
-        self.X = opti.variable(state_dim, N + 1)  # state trajectory variables over prediction horizon
-        self.U = opti.variable(control_dim, N)  # control trajectory variables over prediction horizon
-        self.P = opti.parameter(state_dim)  # initial state parameter
+        self.X = self.opti.variable(state_dim, N + 1)  # state trajectory variables over prediction horizon
+        self.U = self.opti.variable(control_dim, N)  # control trajectory variables over prediction horizon
+        self.P = self.opti.parameter(state_dim)  # initial state parameter
         self.Q_base = ca.MX.eye(state_dim)  # Base state penalty matrix (emphasizes position states)
         weight_increase_factor = 1.00  # Increase factor for each step in the prediction horizon
         self.R = ca.MX.eye(control_dim)  # control penalty matrix for objective function
-        self.W = opti.parameter(2, 1)  # Reference trajectory parameter
+        self.W = self.opti.parameter(2, 1)  # Reference trajectory parameter
         self.A , self.B = get_a_and_b_from_full_spline(full_spline) # list of start and end points
 
         # Objective
@@ -42,16 +42,15 @@ class ClassMPC:
             x_k = self.X[:, k]  # Current state
             u_k = self.U[:, k]  # Current control input
             x_next = self.X[:, k + 1]  # Next state
-
-            dx = spline_dist.min_lineseg_dist(x_k, self.A, self.B)
+            dx = spline_dist.min_lineseg_dist(x_k[:2], self.A, self.B)
             
             du = u_k  # Control input deviation (assuming a desired control input of zero)
 
             # Quadratic cost with reference state and control input
-            obj += ca.mtimes([ca.mtimes(dx.T, Q), dx]) + ca.mtimes(
+            obj += dx + ca.mtimes(
                 [ca.mtimes(du.T, self.R), du])  # Minimize quadratic cost and deviation from reference state
 
-        opti.minimize(obj)
+        self.opti.minimize(obj)
 
         # actual values for metadrive car
         max_steering_angle_deg = 60
@@ -61,7 +60,7 @@ class ClassMPC:
         for k in range(N):
             steering_angle_rad = self.U[0, k] * max_steering_angle_rad  # Convert normalized steering angle to radians
 
-            opti.subject_to(self.X[:, k + 1] == self.X[:, k] + dt * ca.vertcat(
+            self.opti.subject_to(self.X[:, k + 1] == self.X[:, k] + dt * ca.vertcat(
                 self.X[3, k] * ca.cos(self.X[2, k]),
                 self.X[3, k] * ca.sin(self.X[2, k]),
                 (self.X[3, k] / params['L']) * ca.tan(steering_angle_rad),
@@ -69,7 +68,7 @@ class ClassMPC:
             ))
 
         # Constraints
-        opti.subject_to(self.X[:, 0] == self.P)  # Initial state constraint
+        self.opti.subject_to(self.X[:, 0] == self.P)  # Initial state constraint
 
         # Input constraints
         steering_angle_bounds = [-1.0, 1.0]
@@ -81,7 +80,7 @@ class ClassMPC:
         # Apply constraints to optimization problem
         for i in range(N):
             # Input constraints
-            opti.subject_to(action_space.H_np @ self.U[:, i] <= action_space.b_np)
+            self.opti.subject_to(action_space.H_np @ self.U[:, i] <= action_space.b_np)
 
         # Setup solver
         acceptable_dual_inf_tol = 1e11
@@ -97,7 +96,7 @@ class ClassMPC:
                 "ipopt.acceptable_compl_inf_tol": acceptable_compl_inf_tol,
                 "ipopt.hessian_approximation": "limited-memory",
                 "ipopt.print_level": 0}
-        opti.solver('ipopt', opts)
+        self.opti.solver('ipopt', opts)
 
         # Array to store closed-loop trajectory states (X and Y coordinates)
         closed_loop_data = []
@@ -105,8 +104,8 @@ class ClassMPC:
         residuals_data = []
 
         # Initialize warm-start parameters
-        prev_sol_x = None
-        prev_sol_u = None
+        self.prev_sol_x = None
+        self.prev_sol_u = None
 
 
     def generate_spline(vehicle):
@@ -134,14 +133,12 @@ class ClassMPC:
 
     # cubic_spline references W symbol & position references P symbol
     def find_action(self, vehicle, drawer=None):
-        global prev_sol_x
-        global prev_sol_u
 
-        waypoints, waypoint_arr = self.generate_spline(vehicle)
+        waypoints, waypoint_arr = ClassMPC.generate_spline(vehicle)
         if drawer is not None:
-            self.draw_waypoint(drawer, waypoint_arr)
+            draw_waypoint(drawer, waypoint_arr)
 
-        self.get_splines_to_destination(vehicle, drawer)
+        ClassMPC.get_splines_to_destination(vehicle, drawer)
 
         #  Fetch initial state from MetaDrive
         x0 = vehicle.position[0]
@@ -155,8 +152,8 @@ class ClassMPC:
         print("Current velocity: ", v0)
         
         # Store current state in the closed-loop trajectory data
-        if self.i > 0:
-            self.closed_loop_data.append([x0, y0, theta0, v0])
+        # if self.i > 0:
+        # self.closed_loop_data.append([x0, y0, theta0, v0])
 
         # Set initial state for optimization problem
         initial_state = ca.vertcat(x0, y0, theta0, v0)
@@ -165,10 +162,10 @@ class ClassMPC:
         # Set the reference trajectory for the current iteration
         self.opti.set_value(self.W, waypoints)
 
-        if prev_sol_x is not None and prev_sol_u is not None:
+        if self.prev_sol_x is not None and self.prev_sol_u is not None:
             # Warm-starting the solver with the previous solution
-            self.opti.set_initial(self.X, prev_sol_x)
-            self.opti.set_initial(self.U, prev_sol_u)
+            self.opti.set_initial(self.X, self.prev_sol_x)
+            self.opti.set_initial(self.U, self.prev_sol_u)
 
         # Solve the optimization problem
         sol = self.opti.solve()
