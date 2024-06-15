@@ -116,7 +116,7 @@ def generate_spline(vehicle):
     lane_theta = current_lane.heading_theta_at(long_pos)
     waypoint_x = vehicle.position[0] + np.cos(lane_theta) * DISTANCE *2
     waypoint_y = vehicle.position[1] + np.sin(lane_theta) * DISTANCE *2
-    return ca.vertcat(waypoint_x, waypoint_y), [waypoint_x, waypoint_y]
+    return ca.vertcat(waypoint_x, waypoint_y), [[waypoint_x, waypoint_y]]
 
 def make_line(x_offset, height, y_dir=1, color=(1,105/255,180/255)):
     points = [(x*y_dir,x_offset+x,height*x/10+height) for x in range(10)]
@@ -127,11 +127,13 @@ def make_line(x_offset, height, y_dir=1, color=(1,105/255,180/255)):
     return points, colors
 
 HEIGHT = 0.5
-def draw_waypoint(drawer, waypoint):
-    point = [(int(waypoint[0]), int(waypoint[1]), HEIGHT)]
-    color = [np.array([0.09090909, 0.03743316, 0.06417112, 0.09090909])]
+def draw_waypoint(drawer, waypoints, color=None):
+    if color is None:
+        color = np.array([0.09090909, 0.03743316, 0.06417112, 0.09090909])
+    points = [(int(waypoint[0]), int(waypoint[1]), HEIGHT) for waypoint in waypoints]
+    colors = [color for _ in range(len(waypoints))]
     drawer.reset()
-    drawer.draw_points(point, color)
+    drawer.draw_points(points, colors)
 
 
 # cubic_spline references W symbol & position references P symbol
@@ -142,6 +144,8 @@ def find_action(vehicle, drawer=None):
     waypoints, waypoint_arr = generate_spline(vehicle)
     if drawer is not None:
         draw_waypoint(drawer, waypoint_arr)
+
+    get_splines_to_destination(vehicle, drawer)
 
     #  Fetch initial state from MetaDrive
     x0 = vehicle.position[0]
@@ -209,6 +213,7 @@ def get_splines_to_destination(vehicle, drawer):
 
     # Debugging: Print checkpoints
     print("Extracting splines from the following checkpoints:")
+    print("Number of checkpoints: ", len(checkpoints))
     for i, checkpoint in enumerate(checkpoints):
         print(f"Checkpoint {i}: {checkpoint}")
 
@@ -220,11 +225,19 @@ def get_splines_to_destination(vehicle, drawer):
         # Debugging: Print lane information
         print(f"Extracting lanes from node {start_node} to node {end_node}")
 
-        for lane in lanes:
-            # Debugging: Print lane index and length
-            print(f"Extracting spline from lane index {lane.index} with length {lane.length}")
-            spline = lane.get_polyline()
-            all_splines.append(spline)
+        if vehicle.lane in lanes:
+            current_lane = vehicle.lane
+        else:
+            current_lane = lanes[0]
+
+        spline = current_lane.get_polyline()
+        all_splines.append(spline)
+
+        # for lane in lanes:
+        #     # Debugging: Print lane index and length
+        #     print(f"Extracting spline from lane index {lane.index} with length {lane.length}")
+        #     spline = lane.get_polyline()
+        #     all_splines.append(spline)
 
     # Concatenate all splines
     full_spline = np.concatenate(all_splines)
@@ -233,7 +246,14 @@ def get_splines_to_destination(vehicle, drawer):
     print(f"Final spline has {len(full_spline)} points")
 
     # Display the spline in MetaDrive
-    for waypoint in full_spline:
-        draw_waypoint(drawer, waypoint)
+    draw_waypoint(drawer, full_spline)
+
+    print("length of full_spline: ", len(full_spline))
+    print("full_spline: ", full_spline)
 
     return full_spline
+
+def get_a_and_b_from_full_spline(full_spline):
+    A = full_spline[0:-2]
+    B = full_spline[1:-1]
+    return A, B
