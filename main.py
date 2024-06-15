@@ -2,6 +2,7 @@ from metadrive.envs import MetaDriveEnv
 from scipy.interpolate import CubicHermiteSpline
 import numpy as np
 import mpc 
+import get_spline
 
 render = True
 
@@ -10,6 +11,8 @@ env = MetaDriveEnv(dict(
 
 obs, info = env.reset()
 drawer = env.engine.make_point_drawer(scale=1) # create a point drawer
+x_ref = get_spline.get_splines_to_destination(env.vehicle, drawer)
+
 for i in range(10000):
     action = mpc.find_action(env.vehicle, drawer) # calls mpc solver
     mpc.get_splines_to_destination(env.vehicle, drawer)

@@ -32,7 +32,7 @@ R = ca.MX.eye(control_dim)  # control penalty matrix for objective function
 W = opti.parameter(2, 1)  # Reference trajectory parameter
 A = None # list of start points
 B = None # list of end points
-x_ref = get_spline.get_splines_to_destination()
+x_ref = None
 
 # Objective
 obj = 0
@@ -47,10 +47,13 @@ for k in range(N):
                         0, 1)  # Reference state with waypoint and zero for other states
     
     # get reference spline 
-    x_ref = get_spline.get_splines_to_destination()
+    x_ref = 
 
-    dx = x_k - x_ref  # Deviation of state from reference state
-    dx = spline_dist.min_lineseg_dist(x_ref, A, B)
+    # convert x_ref to A & B here or in lucs function
+
+    dx = x_k - x_ref  # Deviation of state from reference state (get rid of)
+
+    dx = spline_dist.min_lineseg_dist(x_k, A, B)
 
     du = u_k  # Control input deviation (assuming a desired control input of zero)
 
