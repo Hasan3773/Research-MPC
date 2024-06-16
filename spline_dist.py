@@ -12,6 +12,8 @@ def min_lineseg_dist(p, a, b, d_ba=None):
         - a: casadi DM of shape (x, 2)
         - b: casadi DM of shape (x, 2)
     """
+    EPSILON = 1e-6
+
     # Convert inputs to CasADi DM if not already
     p = ca.DM(p) if not isinstance(p, (ca.DM, ca.MX)) else p
     a = ca.DM(a) if not isinstance(a, (ca.DM, ca.MX)) else a
@@ -24,7 +26,7 @@ def min_lineseg_dist(p, a, b, d_ba=None):
 
     # Compute the norm (hypotenuse) of each row in d_ba
     norm = ca.sqrt(ca.sum1(d_ba**2))
-    norm_prime = ca.repmat(norm, 2, 1)
+    norm_prime = ca.fmax(ca.repmat(norm, 2, 1), EPSILON)
 
     d = d_ba / norm_prime
     # print("d:", d)
@@ -48,7 +50,7 @@ def min_lineseg_dist(p, a, b, d_ba=None):
     # print("d_pa:", d_pa)
     c = d_pa[0, :] * d[1, :] - d_pa[1, :] * d[0, :]
     # print("c:", c)
-    min_dists = ca.mmin(ca.sqrt(h**2 + ca.transpose(c)**2))
+    min_dists = ca.mmin(ca.sqrt(ca.fmax(h**2 + ca.transpose(c)**2, EPSILON)))
 
     return min_dists
 
